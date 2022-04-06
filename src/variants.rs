@@ -33,7 +33,7 @@ pub trait HashId: Sized + Sealed {
         use crate::bytevec::ByteVec;
         let b: ByteVec<{ Self::REAL }>;
         b = Self::ALPH.iter().filter(|c| !Self::SEP.contains(c)).copied().collect();
-        b.try_into().unwrap()
+        unsafe { b.try_into().unwrap_unchecked() }
     }
     fn with_salt<const SALT: usize>(salt: &[u8; SALT]) -> hash::HashId<Self, SALT> 
     where
@@ -44,14 +44,14 @@ pub trait HashId: Sized + Sealed {
     {
         hash::HashId::init_salt_len(salt, None)
     }
-    fn with_salt_and_len<const SALT: usize>(salt: &[u8; SALT], min_len: usize) -> hash::HashId<Self, SALT> 
+    fn with_salt_and_len<const SALT: usize>(salt: &[u8; SALT], min_len: impl Into<Option<usize>>) -> hash::HashId<Self, SALT> 
     where
     [(); Self::SEP.len()]: Sized,
     [(); Self::ALPH.len()]: Sized,
     [(); Self::REAL]: Sized,
     [(); Self::REAL - Self::GUARDS]: Sized
     {
-        hash::HashId::init_salt_len(salt, min_len)
+        hash::HashId::init_salt_len(salt, min_len.into())
     }
 }
 /// Generic HashID implementation, using full alphabet
@@ -80,8 +80,8 @@ impl HashId for HashIdQr {
 pub struct HashIdB64;
 impl Sealed for HashIdB64 {}
 impl HashId for HashIdB64 {
-    const ALPH: &'static [u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_";
-    const SEP: &'static [u8] = b"cfhistuCFHISTU";
+    const ALPH: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890-_";
+    const SEP: &'static [u8] = b"CFHISTUcfhistu";
 }
 /// base32 Hash ID entry, using RFC4648
 #[derive(Debug, Clone, Copy)]

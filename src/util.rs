@@ -1,4 +1,3 @@
-
 /// Shuffles the ID strings
 pub(crate) fn shuffle(values: &mut [u8], salt: &[u8]) {
     // Explicit: We should *never* wrap, but this avoids
@@ -14,7 +13,7 @@ pub(crate) fn shuffle(values: &mut [u8], salt: &[u8]) {
             salt.get_unchecked(v.0)
         } as usize);
         p += n;
-        let j = (n + v + p ) % i;
+        let j = (n + v + p) % i;
 
         // shuffle
         unsafe {
@@ -26,24 +25,21 @@ pub(crate) fn shuffle(values: &mut [u8], salt: &[u8]) {
 }
 
 /// Creates a numerically weighted hash
-pub(crate) fn make_nhash<const V: usize>(values: [u64; V]) -> u64 
-where [(); V]: Sized
-{
-    values.iter()
-    .enumerate()
-    .map(|(idx, value)| value % (idx as u64 + 100))
-    .sum()
+pub(crate) fn make_nhash(values: &[u64]) -> u64 {
+    values
+        .into_iter()
+        .enumerate()
+        .map(|(idx, value)| value % (idx as u64 + 100))
+        .sum()
 }
-pub(crate) fn make_hash__fast<const A: usize>(mut val: u64, alph: [u8; A]) -> ([u8; 32], usize) {
+pub(crate) fn make_hash_fast<const A: usize>(mut val: u64, alph: [u8; A]) -> ([u8; 32], usize) {
     let (mut hash, mut idx) = ([0u8; 32], 32);
     loop {
         idx -= 1;
-        unsafe {
-            *hash.get_unchecked_mut(idx) = *alph.get_unchecked(val as usize % A)
-        };
+        unsafe { *hash.get_unchecked_mut(idx) = *alph.get_unchecked(val as usize % A) };
         val /= A as u64;
         if val == 0 {
-            return (hash, idx)
+            return (hash, idx);
         }
     }
 }
@@ -56,41 +52,15 @@ pub(crate) fn unhash<const A: usize>(input: &[u8], alph: [u8; A]) -> Option<u64>
         a.map(|a| a + c as u64)
     })
 }
-pub trait ToU64Array: Copy {
-    const LEN: usize;
-    fn to_array(self) -> [u64; Self::LEN];
-    fn is_empty() -> bool;
-    fn array_nonempty(self) -> Option<[u64; Self::LEN]> {
-        if <Self as ToU64Array>::is_empty() {
-            None
-        } else {
-            Some(self.to_array())
-        }
-    }
-}
-macro_rules! toarr {
-    ($($ty:ident)*) => {
-        $(
-            impl ToU64Array for $ty {
-                const LEN: usize = 1;
-                fn to_array(self) -> [u64; 1] { [self as u64] }
-                fn is_empty() -> bool { false }
-            }
-            impl<const N: usize> ToU64Array for [$ty; N] {
-                const LEN: usize = N;
-                fn to_array(self) -> [u64; Self::LEN] {
-                    let changed = self.map(|x| x as u64);
-                    unsafe {
-                        /// SAFETY: Changing from N to LEN. It's safe enough, OK?
-                        core::mem::transmute_copy(&changed)
-                    }
-                }
-                fn is_empty() -> bool { N == 0 }
-            }
-        )*
-    };
-}
-toarr!(u64 u32 u16 u8);
 pub enum DecodeErr {
-    Value, Hash, TooFew, TooMany
+    Value,
+    Hash,
+    Items,
+}
+
+
+pub(crate) const fn garbage<T>() -> T {
+    unsafe {
+        core::mem::MaybeUninit::uninit().assume_init()
+    }
 }
