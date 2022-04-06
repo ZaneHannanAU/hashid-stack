@@ -130,10 +130,10 @@ impl<
 		let values = core::slice::from_ref(&value);
 		match self.encode_buf(values) {
 			#[cfg(feature = "smartstring")]
-			None => String::new_const(),
+			| None => String::new_const(),
 			#[cfg(not(feature = "smartstring"))]
-			None => String::new(),
-			Some(v) => {
+			| None => String::new(),
+			| Some(v) => {
 				let v = v.as_ref().to_vec();
 				unsafe { std::string::String::from_utf8_unchecked(v) }.into()
 			}
@@ -152,10 +152,10 @@ impl<
 	pub fn encode(&self, values: impl AsRef<[u64]>) -> String {
 		match self.encode_inner(values.as_ref()) {
 			#[cfg(feature = "smartstring")]
-			None => String::new_const(),
+			| None => String::new_const(),
 			#[cfg(not(feature = "smartstring"))]
-			None => String::new(),
-			Some(v) => {
+			| None => String::new(),
+			| Some(v) => {
 				let v = v.as_ref().to_vec();
 				unsafe { std::string::String::from_utf8_unchecked(v) }.into()
 			}
@@ -167,8 +167,8 @@ impl<
 	}
 	pub fn encode_inner(&self, values: &[u64]) -> Option<ByteVec<BV_L_D>> {
 		match values.as_ref() {
-			[] => None,
-			values => {
+			| [] => None,
+			| values => {
 				let nh = util::make_nhash(values);
 				let mut buffer = ByteVec::new();
 
@@ -269,8 +269,8 @@ impl<
 		} else {
 			let mut alph = self.alphabet.clone();
 			match val.split_first() {
-				None => unsafe { unreachable_unchecked() },
-				Some((&lottery, val)) => {
+				| None => unsafe { unreachable_unchecked() },
+				| Some((&lottery, val)) => {
 					let mut tmp = self.extend_key(lottery);
 					let segs = val.split(|u| self.separators.contains(u));
 					let result = segs.map(|seg| {
@@ -291,8 +291,8 @@ impl<
 						}
 					}
 					match max.cmp(&OUT) {
-						Ordering::Equal => Ok(out),
-						_ => Err(util::DecodeErr::Items),
+						| Ordering::Equal => Ok(out),
+						| _ => Err(util::DecodeErr::Items),
 					}
 				}
 			}
