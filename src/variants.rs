@@ -20,13 +20,6 @@ pub trait HashId: Sized + Sealed {
 	const REAL: usize = Self::ALPH.len() - Self::SEP.len();
 	/// Derived - guard constants
 	const GUARDS: usize = Self::REAL.div_ceil(GUARD_DIV);
-	fn sanity_alph_sep() {
-		debug_assert!(
-			Self::SEP.iter().all(|c| Self::ALPH.contains(c)),
-			"All SEParator must be also in ALPHabet, in type {}",
-			core::any::type_name::<Self>()
-		);
-	}
 	/// SAFETY: Implemented internally only. Produces a sanitised alphabet.
 	fn filtered() -> [u8; Self::REAL] {
 		use crate::bytevec::ByteVec;
@@ -38,6 +31,7 @@ pub trait HashId: Sized + Sealed {
 			.collect();
 		unsafe { b.try_into().unwrap_unchecked() }
 	}
+	/// Generates a hashid instance using the given salt
 	fn with_salt<const SALT: usize>(salt: &[u8; SALT]) -> hash::HashId<Self, SALT>
 	where
 		[(); Self::SEP.len()]: Sized,
@@ -47,6 +41,7 @@ pub trait HashId: Sized + Sealed {
 	{
 		hash::HashId::init_salt_len(salt, None)
 	}
+	/// Generates a hashid instance using the given salt and length
 	fn with_salt_and_len<const SALT: usize>(
 		salt: &[u8; SALT],
 		min_len: impl Into<Option<usize>>,
@@ -87,7 +82,8 @@ pub struct HashIdB64;
 impl Sealed for HashIdB64 {}
 impl HashId for HashIdB64 {
 	const ALPH: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890-_";
-	const SEP: &'static [u8] = b"CFHISTUcfhistu";
+	// well wtf this breaks if I don't have at least - or _ in it lol
+	const SEP: &'static [u8] = b"CFHISTUcfhistu-_";
 }
 /// base32 Hash ID entry, using RFC4648
 #[derive(Debug, Clone, Copy)]
@@ -101,9 +97,22 @@ impl HashId for HashIdB32 {
 macro_rules! tests {
     ($($i:ident),* ) => {
         #[cfg(test)] mod tests {
+					trait Sanity {
+						/// SAFETY: test status
+						fn sanity_alph_sep();
+					}
+						impl<T: super::HashId> Sanity for T {
+							fn sanity_alph_sep() {
+								debug_assert!(
+									Self::SEP.iter().all(|c| Self::ALPH.contains(c)),
+									"All SEParator must be also in ALPHabet, in type {}",
+									core::any::type_name::<Self>()
+								);
+							}
+						}
             use super::*;
             #[test] fn sanity() {
-                $( <$i as HashId>::sanity_alph_sep();)*
+                $( <$i as Sanity>::sanity_alph_sep();)*
             }
             #[test] fn init() {
                 $(

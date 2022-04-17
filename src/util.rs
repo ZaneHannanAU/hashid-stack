@@ -1,5 +1,8 @@
 /// Shuffles the ID strings
 pub(crate) fn shuffle(values: &mut [u8], salt: &[u8]) {
+	if salt.is_empty() {
+		return;
+	}
 	// Explicit: We should *never* wrap, but this avoids
 	// potential panics.
 	use core::num::Wrapping;
@@ -44,18 +47,43 @@ pub(crate) fn make_hash_fast<const A: usize>(mut val: u64, alph: [u8; A]) -> ([u
 	}
 }
 
+// ISSUES:
+// - alph.iter().position(|&it| it == v)? produces a variable time decode.
+// - this lookup table could potentially be done using simd, but currently isn't.
+// - abuse of mem::transmute and nonzerou8 to produce a reverse lookup table.
+//
+// For more efficient and useful option, would use the given alph, extend it, and splat xor
+// with a u8x64. Currently, we only use a maximum base of 64, so this would *technically* be sound.
+// Unfortunately, I lack the bigbrainedness to do this. If you can figure it out, idk what I can do
+// for you, because it wouldn't be enough. Trying to use NEON terms - vqtbl4q_u8 - here, would result
+// in other issues, and on avx-512 would have a performance penalty instead. 
+// 
+// In other news, it's super contrived to get it into the right means.
+// EDIT:
+// Ok so I have no idea why the lookup table doesn't work, so I give up.
 pub(crate) fn unhash<const A: usize>(input: &[u8], alph: [u8; A]) -> Option<u64> {
+	//let lookup = unsafe {
+	//	let mut lookup = [0u8; 256];
+	//	for (x, i) in alph.into_iter().enumerate() {
+	//		*lookup.get_unchecked_mut(i as usize) = x as u8;
+	//	}
+	//	use core::{mem::transmute, num::NonZeroU8 as U8};
+	//	let lookup: [Option<U8>; 256] = transmute(lookup);
+	//	lookup
+	//};
 	input.into_iter().enumerate().fold(Some(0), |a, (i, &v)| {
-		let pos = alph.iter().position(|&it| it == v)?;
+		//let pos = unsafe { *lookup.get_unchecked(v as usize) }?.get() as usize;
+		let pos = alph.into_iter().position(|it| it == v)?;
 		let b = A.checked_pow((input.len() - i - 1).try_into().ok()?)?;
 		let c = pos.checked_mul(b)?;
 		a.map(|a| a + c as u64)
 	})
 }
-pub enum DecodeErr {
-	Value,
+#[derive(Clone, Copy, Debug)]
+pub enum DecodeErr<const N: usize> {
+	Value(usize, [u64; N]),
 	Hash,
-	Items,
+	Items(usize, usize),
 }
 
 pub(crate) const fn garbage<T>() -> T {

@@ -1,5 +1,7 @@
 use crate::util;
 use core::{convert::TryInto, iter::*, num::Wrapping};
+
+
 pub struct ByteVec<const N: usize> {
 	data: [u8; N],
 	idx: Wrapping<usize>,
@@ -44,20 +46,15 @@ impl<const N: usize> ByteVec<N> {
 		}
 		self.idx += Wrapping(1);
 	}
-	/// SAFETY: takes whatever is in the buffer and dumps it to output unfiltered.
-	pub unsafe fn display_unchecked(&self) -> display::Display<N> {
-		display::Display(&self)
-	}
-	/// SAFETY: only displays printable ASCII - 0x20..=0x7E
-	pub fn display_ascii(&self) -> display::DisplayChecked<N> {
-		display::DisplayChecked(&self)
-	}
-	pub fn get(&self, off: usize) -> Option<&u8> {
+	pub fn get_checked(&self, off: usize) -> Option<&u8> {
 		if off <= self.idx.0 {
 			Some(unsafe { self.data.get_unchecked(off) })
 		} else {
 			None
 		}
+	}
+	pub unsafe fn get(&self, off: usize) -> u8 {
+		*self.data.get_unchecked(off)
 	}
 	pub fn insert(&mut self, idx: usize, value: u8) {
 		self.data.copy_within(idx..=self.idx.0, idx + 1);
@@ -68,6 +65,14 @@ impl<const N: usize> ByteVec<N> {
 	}
 	pub fn len(&self) -> usize {
 		self.idx.0
+	}
+	/// SAFETY: takes whatever is in the buffer and dumps it to output unfiltered.
+	pub unsafe fn display_unchecked(&self) -> display::Display<N> {
+		display::Display(&self)
+	}
+	/// SAFETY: only displays printable ASCII - 0x20..=0x7E
+	pub fn display_ascii(&self) -> display::DisplayChecked<N> {
+		display::DisplayChecked(&self)
 	}
 	pub fn as_slice(&self) -> &[u8] {
 		self.as_ref()
@@ -93,7 +98,7 @@ impl<const N: usize> FromIterator<u8> for ByteVec<N> {
 		}
 	}
 }
-impl<const N: usize> Extend<u8> for ByteVec<N> {
+impl<const N: usize> Extend<u8> for ByteVec< N> {
 	fn extend<I: IntoIterator<Item = u8>>(&mut self, i: I) {
 		let mut iter = i.into_iter();
 		for (v, s) in (&mut self.data[self.idx.0..]).iter_mut().zip(&mut iter) {
@@ -106,7 +111,7 @@ impl<const N: usize> Extend<u8> for ByteVec<N> {
 	//    self.push(b);
 	//}
 }
-impl<'a, const N: usize> Extend<&'a u8> for ByteVec<N> {
+impl<'a, const N: usize> Extend<&'a u8> for ByteVec< N> {
 	fn extend<I: IntoIterator<Item = &'a u8>>(&mut self, i: I) {
 		let mut iter = i.into_iter();
 		for (v, s) in (&mut self.data[self.idx.0..]).iter_mut().zip(&mut iter) {
@@ -120,7 +125,7 @@ impl<'a, const N: usize> Extend<&'a u8> for ByteVec<N> {
 	//}
 }
 
-impl<const N: usize> TryInto<[u8; N]> for ByteVec<N> {
+impl<const N: usize> TryInto<[u8; N]> for ByteVec< N> {
 	type Error = (usize, usize);
 	fn try_into(self) -> Result<[u8; N], (usize, usize)> {
 		if self.idx.0 == (N - 1) {

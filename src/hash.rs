@@ -6,7 +6,7 @@ use smartstring::alias::String;
 
 /// Default bytevec length when returning from an encode function.
 /// Set to house option + usize extra within 64B by default.
-const BV_L_D: usize = 63 - core::mem::size_of::<usize>();
+const BV_L_D: usize = 127 - core::mem::size_of::<usize>();
 #[derive(Clone, Copy, Debug)]
 pub struct HashId<
 	H: Hash,
@@ -128,16 +128,7 @@ impl<
 	#[cfg(feature = "std")]
 	pub fn encode_one(&self, value: u64) -> String {
 		let values = core::slice::from_ref(&value);
-		match self.encode_buf(values) {
-			#[cfg(feature = "smartstring")]
-			| None => String::new_const(),
-			#[cfg(not(feature = "smartstring"))]
-			| None => String::new(),
-			| Some(v) => {
-				let v = v.as_ref().to_vec();
-				unsafe { std::string::String::from_utf8_unchecked(v) }.into()
-			}
-		}
+		self.encode(values)
 	}
 	/// Encode an ID list
 	///
@@ -150,16 +141,16 @@ impl<
 	/// ```
 	#[cfg(feature = "std")]
 	pub fn encode(&self, values: impl AsRef<[u64]>) -> String {
-		match self.encode_inner(values.as_ref()) {
-			#[cfg(feature = "smartstring")]
-			| None => String::new_const(),
-			#[cfg(not(feature = "smartstring"))]
-			| None => String::new(),
-			| Some(v) => {
-				let v = v.as_ref().to_vec();
-				unsafe { std::string::String::from_utf8_unchecked(v) }.into()
-			}
+		#[cfg(feature = "smartstring")]
+		let mut s = String::new_const();
+		#[cfg(not(feature = "smartstring"))]
+		let mut s = String::new();
+		if let Some(v) = self.encode_inner(values.as_ref()) {
+			let v = v.as_ref();
+			let v = unsafe { core::str::from_utf8_unchecked(v) };
+			s.push_str(v);
 		}
+		s
 	}
 
 	pub fn encode_buf(&self, values: impl AsRef<[u64]>) -> Option<ByteVec<BV_L_D>> {
@@ -194,13 +185,13 @@ impl<
 				if let Some(len) = self.min_len.map(NonZeroUsize::get) {
 					// Extension round 1
 					if buffer.len() < len {
-						let g_idx = nh as usize + *buffer.get(0)? as usize;
+						let g_idx = nh as usize + unsafe { buffer.get(0) } as usize;
 						let guard = *unsafe { self.guards.get_unchecked(g_idx % H::GUARDS) };
 						buffer.insert(0, guard);
 
 						// Extension round 2
 						if buffer.len() < len {
-							let g_idx = nh as usize + *buffer.get(2)? as usize;
+							let g_idx = nh as usize + unsafe { buffer.get(2) } as usize;
 							let guard = *unsafe { self.guards.get_unchecked(g_idx % H::GUARDS) };
 							buffer.push(guard);
 						}
@@ -238,7 +229,7 @@ impl<
 	pub fn decode<const OUT: usize>(
 		&self,
 		input: impl AsRef<[u8]>,
-	) -> Result<[u64; OUT], util::DecodeErr> {
+	) -> Result<[u64; OUT], util::DecodeErr<OUT>> {
 		let input = input.as_ref();
 		let out = self.decode_fast(input)?;
 		let encode = self.encode_buf(out);
@@ -253,10 +244,10 @@ impl<
 	pub fn decode_fast<const OUT: usize>(
 		&self,
 		input: impl AsRef<[u8]>,
-	) -> Result<[u64; OUT], util::DecodeErr> {
+	) -> Result<[u64; OUT], util::DecodeErr<OUT>> {
 		self.decode_inner(input.as_ref())
 	}
-	fn decode_inner<const OUT: usize>(&self, input: &[u8]) -> Result<[u64; OUT], util::DecodeErr> {
+	fn decode_inner<const OUT: usize>(&self, input: &[u8]) -> Result<[u64; OUT], util::DecodeErr<OUT>> {
 		let mut val = input.as_ref();
 		if let Some(g_idx) = val.iter().position(|u| self.guards.contains(u)) {
 			val = &val[(g_idx + 1)..];
@@ -280,22 +271,33 @@ impl<
 					});
 					let mut out = [0; OUT];
 					let mut max = 0;
-					for (idx, val) in result.enumerate() {
-						max = idx;
+					for  val in result {
 						if let Some(val) = val {
-							if let Some(o) = out.get_mut(idx) {
+							if let Some(o) = out.get_mut(max) {
 								*o = val;
 							}
+							max += 1;
 						} else {
-							return Err(util::DecodeErr::Value);
+							return Err(util::DecodeErr::Value(max, out));
 						}
 					}
 					match max.cmp(&OUT) {
 						| Ordering::Equal => Ok(out),
-						| _ => Err(util::DecodeErr::Items),
+						| _ => Err(util::DecodeErr::Items(OUT, max)),
 					}
 				}
 			}
 		}
+	}
+}
+
+impl<H: Hash> Default for HashId<H, 0>
+where
+	[(); H::SEP.len()]: Sized,
+	[(); H::REAL - H::GUARDS]: Sized,
+	[(); H::ALPH.len()]: Sized,
+{
+	fn default() -> Self {
+		H::with_salt(b"")
 	}
 }

@@ -1,3 +1,7 @@
+// needed for feature(generic_const_exprs)
+// see https://github.com/rust-lang/rust/issues/76560 for more info
+#![allow(incomplete_features)]
+
 // used in util::shuffle extensively
 #![feature(slice_swap_unchecked)]
 // used in hash::HashId, variants::HashId extensively
@@ -30,9 +34,9 @@
 //!     - `generic_const_exprs` for most functionality
 //!     - `int_roundings` for guard use
 //!     - `slice_swap_unchecked` for `util::shuffle`
-//!     - `extend_one` for `bytevec::ByteVec<N> as core::iter::Extend<u8>`
 //! - Less tested
 //! - All inbound data must be known at compile time, including length of the salt.
+//! - The return values are an array that have some custom formatting functions added, or a [`SmartString<LazyCompact>`](https://docs.rs/smartstring/latest/smartstring/alias/type.String.html).
 //!
 //! This does come with some benefits, though
 //!
@@ -46,7 +50,11 @@ pub mod variants;
 
 pub mod prelude {
 	pub use crate::util::DecodeErr;
-	pub use crate::variants::{HashId as _, HashIdDefault as HashIds, *};
+	pub use crate::variants::{
+		HashId as _, HashIdB32 as B32, HashIdB64 as B64, HashIdDefault as HashIds,
+		HashIdDefault as Normal, HashIdQr as QR, *,
+	};
+	pub use crate::hash::HashId as HashID;
 }
 
 /// Simple `Copy` byte vector. Has display.
